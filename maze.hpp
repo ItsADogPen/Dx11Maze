@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <iostream>
 #include <vector>
+#include <memory>
 
 typedef struct GridIndex 
 {
@@ -12,45 +13,44 @@ typedef struct GridIndex
 	bool isWall;
 };
 
-//Forward declaration of other class
+// Forward declaration of other classes
+// 前のクラス表明
 class Canvas;
 class Tile;
 
 class Maze 
 {
 public:
+	Maze(const Maze&) = delete;
+	Maze& operator=(const Maze&) = delete;
+
+	// Meyers' Singleton
+	static Maze& GetInstance(void)
+	{
+		static Maze instance;
+		return instance;
+	}
+	~Maze(void);
 	
-	void InitMaze(int nCellsWidth, int nCellsHeight);
+	void InitMaze(int nCellsWidth, int nCellsHeight, int scrnW, int scrnH);
 	void GenerateMaze(Canvas* canvas);
-	void FindPath(int x1, int y1, int x2, int y2);
+	void FindPath(int startX, int startY, int endX, int endY);
 	void GeneratePath(Canvas* canvas);
 
-	// Methods to interact with other classes
-	int GetMazeWidth() const;
-	int GetMazeHeight() const;
-	int GetCellWidth() const;
-	int GetCellHeight() const;
+	
+	int GetMazeWidth(void) const;
+	int GetMazeHeight(void) const;
+	int GetCellWidth(void) const;
+	int GetCellHeight(void) const;
 	std::vector<GridIndex>* GetMaze(void);
 	std::vector<GridIndex>* GetPath(void);
 	std::vector<Tile>& GetTiles(void);
 
-	static Maze* GetInstance() 
-	{
-		if (_mazePtr == nullptr) 
-		{
-			_mazePtr = new Maze();
-		}
-
-		return _mazePtr;
-	}
-
-protected:
-	Maze();
-	~Maze();
-
 private:
+	Maze(void);
+
 	static Maze* _mazePtr;
-	
+
 	int _mazeSizeWidth;
 	int _mazeSizeHeight;
 	int _cellWidth;
@@ -58,6 +58,5 @@ private:
 
 	std::vector<GridIndex> _maze;
 	std::vector<GridIndex> _path;
-	
 	std::vector<Tile> _tiles;
 };

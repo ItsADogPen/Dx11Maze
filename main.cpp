@@ -1,43 +1,35 @@
-﻿#define WIN32_LEAN_AND_MEAN
-#include "main.hpp"
+#define WIN32_LEAN_AND_MEAN
 #include <iostream>
 #include <stdlib.h>
 #include <string>
+
+// = Direct X =
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "dxguid.lib")
+
+// = SDL =
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+// ============
 
 #include "canvas.hpp"
-
-int scrn_w = 800;
-int scrn_h = 600;
-bool isRunning = false;
-
-/*
-鈴木先生、お疲れ様です。
-
-提出が遅くってしまって申し訳ございません。
-
-メイズを完成しました。ご覧ください。
-
-ただ、ウィンドウのコンテキストがなんとなくの理由でフリーズしているようですが、空電のメイズ画像を１つだけを生成していますので、
-メイズ自体は機能します。データはCMDにも出力されるので、機能するデータは確認できます。
-
-よろしくお願いいたします。
-*/
-
 
 int main(int argc, char* args[])
 {
 	SDL_SetMainReady();
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3D");
-	
+
 	srand(time(NULL));
+	bool isRunning = true;
 
 	std::string name = "Maze";
-	Canvas app{name};
 
-	isRunning = app.Init();
+	Canvas app = {name, 800, 600, &isRunning};
 
+	// = Main Program Loop =
 	while (isRunning) 
 	{
 		app.Loop();

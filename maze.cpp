@@ -1,23 +1,19 @@
-#include "main.hpp"
-#include "maze.hpp"
-#include "canvas.hpp"
+﻿#include "maze.hpp"
 #include "tile.hpp"
+#include "canvas.hpp"
 
 #include <stdlib.h>
 #include <queue>
 
-Maze* Maze::_mazePtr = nullptr;
 
-Maze::Maze() 
-{}
-
+// ======= Public ==========
 Maze::~Maze()
 {}
 
-void Maze::InitMaze(int nCellsWidth, int nCellsHeight)
+void Maze::InitMaze(int nCellsWidth, int nCellsHeight, int scrnW, int scrnH)
 {
-	_cellWidth = scrn_w / nCellsWidth;
-	_cellHeight = scrn_h / nCellsHeight;
+	_cellWidth = scrnW / nCellsWidth;
+	_cellHeight = scrnH / nCellsHeight;
 	_mazeSizeWidth = _cellWidth * nCellsWidth;
 	_mazeSizeHeight = _cellHeight * nCellsHeight;
 }
@@ -28,14 +24,14 @@ void Maze::GenerateMaze(Canvas* canvas)
 	_maze.clear();
 
 	for (int j = 0; j < (_mazeSizeHeight / _cellHeight); j++) {
-		for (int i = 0; i < (_mazeSizeWidth/_cellWidth); i++)
+		for (int i = 0; i < (_mazeSizeWidth / _cellWidth); i++)
 		{
 			GridIndex nGrid = {};
 			int nRan = rand() % 10;
-			
-			if ( (i == 0 && j == 0) || (nRan < 9))  nGrid.isWall = false;
+
+			if ((i == 0 && j == 0) || (nRan < 9))  nGrid.isWall = false;
 			else									nGrid.isWall = true;
-		
+
 			nGrid.x = i;
 			nGrid.y = j;
 			nGrid.visited = false;
@@ -45,104 +41,124 @@ void Maze::GenerateMaze(Canvas* canvas)
 	}
 }
 
-void Maze::FindPath(int x1, int y1, int x2, int y2)
+void Maze::FindPath(int startX, int startY, int endX, int endY)
 {
-	int xConvert = x1 / _cellWidth;
-	int yConvert = y1 / _cellHeight;
-	// convert 2D grid to 1D array index, get cell
-	// ID �A���C -> 2D �O���b�h�ɕύX
-	int index = _mazeSizeWidth >= _mazeSizeHeight ? 
-		(yConvert * (_mazeSizeWidth / _cellWidth) + xConvert) : (xConvert * (_mazeSizeHeight / _cellHeight) + yConvert);
+	// Convert screen coords -> grid coords
+	// 画面座標 -> グリッド座標に変更する
+	int startGridX = startX / _cellWidth;
+	int startGridY = startY / _cellHeight;
+	int endGridX = endX / _cellWidth;
+	int endGridY = endY / _cellHeight;
 
-	std::vector<std::pair<int, int>> dir =
+	// Get grid dimensions
+	// グリッドサイズを取って
+	int gridWidth = _mazeSizeWidth / _cellWidth;
+	int gridHeight = _mazeSizeHeight / _cellHeight;
+
+	// Bounds check using lambda function
+	// lamba functionで画面の限定確認
+	auto isInBounds = [gridWidth, gridHeight](int x, int y) 
 	{
-		{-1, 0},
-		{1, 0},
-		{0, -1},
-		{0, 1}
+		return x >= 0 && x < gridWidth && y >= 0 && y < gridHeight;
 	};
 
-	std::queue<int> pathQ;
-	pathQ.push(index);				// A
-	_maze.at(index).visited = true;
-	_maze.at(index).isWall = false;
-	_maze.at(index).parentIndex = -1; // using -1 to determine the start
-
-	while (!pathQ.empty()) 
+	if (!isInBounds(startGridX, startGridY) || !isInBounds(endGridX, endGridY)) 
 	{
-		int currIndex = pathQ.front(); // A
+		std::cout << "Start or end position out of bounds\n";
+		return;
+	}
+
+	int endIndex = endGridY * gridWidth + endGridX;
+	if (endIndex >= _maze.size()) 
+	{
+		std::cout << "End index out of bounds: " << endIndex << " >= " << _maze.size() << "\n";
+		return;
+	}
+
+	// Check Wall
+	// 壁場合を確認
+	if (_maze.at(endIndex).isWall) 
+	{
+		std::cout << "Cannot pathfind to a wall tile at grid position: " << endGridX << ", " << endGridY << "\n";
+		std::cout << "Index: " << endIndex << "\n";
+		return;
+	}
+
+	// Convert start position to 1D array index
+	// 初めてのポジション -> 1D アレイ index
+	int startIndex = startGridY * gridWidth + startGridX;
+
+	// Initialize start position
+	// 初めてのポジションをイニシャライズ
+	std::queue<int> pathQ;
+	pathQ.push(startIndex);
+	_maze.at(startIndex).visited = true;
+	_maze.at(startIndex).isWall = false;
+	_maze.at(startIndex).parentIndex = -1;
+
+	// BFS loop
+	// BFS ループ
+	while (!pathQ.empty())
+	{
+		int currIndex = pathQ.front();
 		pathQ.pop();
 
-		GridIndex currGrid = _maze.at(currIndex);
-		int currX = currGrid.x;
-		int currY = currGrid.y;
-		int distP = currGrid.distFromStart;
+		GridIndex& currGrid = _maze.at(currIndex);
 
-		for (const auto& nDir : dir) 
+		// Check if we reached the end
+		// 果てのポイントを確認
+		if (currGrid.x == endGridX && currGrid.y == endGridY)
 		{
-			int newX = currX + nDir.first;
-			int newY = currY + nDir.second;
+			_path.clear();
 
-			if ((newX >= 0) && (newX < (_mazeSizeWidth / _cellWidth)) &&
-				(newY >= 0) && (newY < (_mazeSizeHeight / _cellHeight))) {
-			
-				// Haven't yet set up for column-major mazes.  So for now.., just row-major mazes
-				// ��D��͂܂������Ă��܂���B
+			// Backtrack from end to start
+			// 果てから初めてのポジションへ後戻る
+			int backtrackIndex = currIndex;
+			while (backtrackIndex != -1)
+			{
+				_path.push_back(_maze.at(backtrackIndex));
+				backtrackIndex = _maze.at(backtrackIndex).parentIndex;
+			}
+			std::reverse(_path.begin(), _path.end());
+			return;
+		}
 
-				// convert grid coordinates back to 1D index
-				// 2D -> 1D�ɕύX
-				int neighbour = newY * (_mazeSizeWidth / _cellWidth) + newX;
-				
-				if (neighbour < _maze.size()) // Additional bounds check
+		// Check neighbours
+		// グリッド隣人を確認
+		std::vector<std::pair<int, int>> directions = 
+		{ 
+			{-1, 0}, 
+			{1, 0}, 
+			{0, -1}, 
+			{0, 1} 
+		};
+
+		// ranged-based for-loop using structured binding
+		// 日本語わかんね
+		for (const auto& [dx, dy] : directions)
+		{
+			int newX = currGrid.x + dx;
+			int newY = currGrid.y + dy;
+
+			if (isInBounds(newX, newY))
+			{
+				int neighborIndex = newY * gridWidth + newX;
+				if (!_maze.at(neighborIndex).visited && !_maze.at(neighborIndex).isWall)
 				{
-					if (!_maze.at(neighbour).visited && !_maze.at(neighbour).isWall)
-					{
-						_maze.at(neighbour).visited = true;
-						_maze.at(neighbour).distFromStart = distP + 1;
-						_maze.at(neighbour).parentIndex = currIndex;
-
-						// Reached the END
-						// �ʂĂ�B��
-						if (_maze.at(neighbour).x == (x2 / _cellWidth) && _maze.at(neighbour).y == (y2 / _cellHeight))
-						{
-							_path.clear();
-
-							// Backtrack from the end to start
-							// �ʂĂ��珉�߂Ă�XY�֍s����
-							currIndex = neighbour;
-							while (currIndex != -1) 
-							{
-								_path.push_back(_maze.at(currIndex));
-								currIndex = _maze.at(currIndex).parentIndex;
-							}
-
-							std::reverse(_path.begin(), _path.end());
-
-							// Clear queue to stop FindPath() BFS
-							pathQ = std::queue<int>();
-							std::cout << "REACHED THE END\n";
-							break;
-						}
-						else
-						{
-							pathQ.push(neighbour);
-						}
-					}
-				}
-				else
-				{
-					std::cout << "Warning: Attempted to access out of bounds index: " << neighbour << "\n";
+					_maze.at(neighborIndex).visited = true;
+					_maze.at(neighborIndex).distFromStart = currGrid.distFromStart + 1;
+					_maze.at(neighborIndex).parentIndex = currIndex;
+					pathQ.push(neighborIndex);
 				}
 			}
 		}
 	}
-
 }
 
-void Maze::GeneratePath(Canvas* canvas)
+void Maze::GeneratePath(Canvas* canvas) 
 {
 	// And also Maze
-	// �܂��A���C�Y�S��
+	// メイズと
 	std::cout << _maze.size() << "\n";
 	for (int i = 0; i < _maze.size(); i++) 
 	{
@@ -151,18 +167,27 @@ void Maze::GeneratePath(Canvas* canvas)
 			std::cout << "\n";
 		}
 
-		bool isStart = (_maze.at(i).x == _path.front().x && _maze.at(i).y == _path.front().y);
-		bool isEnd = (_maze.at(i).x == _path.back().x && _maze.at(i).y == _path.back().y);
+		bool isStart = false;
+		bool isEnd = false;
 		bool isPathCell = false;
-		for (const auto& pathCell : _path) 
+
+		// Only check path-related stuff if we actually have a path
+		// ルートがある場合だけで
+		if (!_path.empty()) 
 		{
-			if (_maze.at(i).x == pathCell.x && _maze.at(i).y == pathCell.y) 
+			isStart = (_maze.at(i).x == _path.front().x && _maze.at(i).y == _path.front().y);
+			isEnd = (_maze.at(i).x == _path.back().x && _maze.at(i).y == _path.back().y);
+		
+			for (const auto& pathCell : _path)
 			{
-				isPathCell = true;
-				break;
+				if (_maze.at(i).x == pathCell.x && _maze.at(i).y == pathCell.y)
+				{
+					isPathCell = true;
+					break;
+				}
 			}
 		}
-		
+
 		if (isStart) 
 		{
 			std::cout << " S ";
@@ -171,20 +196,29 @@ void Maze::GeneratePath(Canvas* canvas)
 		{
 			std::cout << " E ";
 		}
-		
+
 		if (!_maze.at(i).isWall) 
 		{
-			if (isPathCell) 
+			if (isPathCell)
 			{
-				std::cout << "   ";
-			} 
+					std::cout << "   ";
+			}
 			else	std::cout << " a ";
 		}
 		else 
 		{
 			std::cout << " I ";
 		}
-		Tile newTile(_maze.at(i).x, _maze.at(i).y, _maze.at(i).isWall, isPathCell, this);
+		
+		Tile newTile(
+			_maze.at(i).x, _maze.at(i).y,
+			_maze.at(i).isWall, isPathCell,
+			canvas->GetScreenWidth(), canvas->GetScreenHeight(), this);
+		if (!newTile.Initialize(canvas)) 
+		{
+			std::cerr << "Failed to initialize tile\n";
+			continue;
+		}
 		_tiles.push_back(newTile);
 	}
 }
@@ -209,17 +243,22 @@ int Maze::GetCellHeight() const
 	return _cellHeight;
 }
 
-std::vector<GridIndex>* Maze::GetMaze(void) 
+std::vector<GridIndex>* Maze::GetMaze(void)
 {
 	return &_maze;
 }
 
-std::vector<GridIndex>* Maze::GetPath(void) 
+std::vector<GridIndex>* Maze::GetPath(void)
 {
 	return &_path;
 }
 
-std::vector<Tile>& Maze::GetTiles(void) 
+std::vector<Tile>& Maze::GetTiles(void)
 {
 	return _tiles;
 }
+// =======================================
+
+// ====== Private ======
+Maze::Maze()
+{}

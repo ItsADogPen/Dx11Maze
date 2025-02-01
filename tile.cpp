@@ -1,49 +1,46 @@
-#include "main.hpp"
-#include "tile.hpp"
+Ôªø#include "tile.hpp"
 #include "canvas.hpp"
 #include "maze.hpp"
-
-#include <SDL.h>
-#include <SDL_config_windows.h>
-#include <SDL_syswm.h>
+#include "errorchecker.hpp"
 
 #include <d3dcompiler.h>
 
+// = SDL =
+#include <SDL.h>
+#include <SDL_config_windows.h>
+#include <SDL_syswm.h>
+//=========
+
 #include <iostream>
 
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "dxguid.lib")
 
-
-Tile::Tile(int x, int y, bool isWall, bool isPath, Maze* maze)
+// ======= Public ================
+Tile::Tile(int x, int y, bool isWall, bool isPath, int scrnW, int scrnH, Maze* maze)
 {
 	// Initial XY
-	// èâìxÇÃXY
+	// „Ç§„Éã„Ç∑„É£„É´XY
 	_posX = x;
 	_posY = y;
 
 	// Cell width and height
-	// É^ÉCÉãÇÃïùÇ∆çÇÇ≥
+	// „Ç∞„É™„ÉÉ„Éâ W & H
 	_cellWidth = static_cast<float>(maze->GetCellWidth());
 	_cellHeight = static_cast<float>(maze->GetCellHeight());
-	
+
 	// Change to world coordinates
-	// ÉèÅ[ÉãÉhÉRÅ[ÉfÉBÉlÅ[ÉgÇ…ïœçX
+	// „ÉØ„Éº„É´„ÉâÂ∫ßÊ®ô„Å´Â§âÊõ¥„Åô„Çã
 	_worldX = static_cast<float>(_posX) * _cellWidth;
 	_worldY = static_cast<float>(_posY) * _cellHeight;
-	
+
 	// Change to Dx11 Normal Device Coordinates
-	// Dx11 ÇÃ ÉmÅ[É}ÉãÉfÉoÉCÉXÉRÅ[ÉfÉBÉlÅ[Ég (NDC)Å@Ç…ïœçX
-	_normWorldX = (_worldX / (scrn_w / 2.0f)) - 1.0f;
-	_normWorldY = 1.0f - ( (_worldY + _cellHeight) / (scrn_h / 2.0f));
-	_normWidth = _cellWidth / (scrn_w / 2.0f);
-	_normHeight = _cellHeight / (scrn_h / 2.0f);
+	// Dx11 „ÅÆ NDCÂ∫ßÊ®ô„Å´Â§âÊõ¥„Åô„Çã
+	_normWorldX = (_worldX / (scrnW / 2.0f)) - 1.0f;
+	_normWorldY = 1.0f - ((_worldY + _cellHeight) / (scrnH / 2.0f));
+	_normWidth = _cellWidth / (scrnW / 2.0f);
+	_normHeight = _cellHeight / (scrnH / 2.0f);
 
 	// Booleans
-	// ÉuÅ[ÉäÉAÉì
+	// „Éñ„Éº„É™„Ç¢„É≥
 	_isWall = isWall;
 	_isPath = isPath;
 }
@@ -56,49 +53,86 @@ Tile::~Tile()
 	_pixelShader.Reset();
 }
 
-void Tile::SetIsWall(bool isWall) 
+void Tile::SetIsWall(bool isWall)
 {
 	_isWall = isWall;
 }
 
-void Tile::SetIsPath(bool isPath) 
+void Tile::SetIsPath(bool isPath)
 {
 	_isPath = isPath;
 }
 
-bool Tile::GetIsWall() const 
+bool Tile::GetIsWall() const
 {
 	return _isWall;
 }
 
-bool Tile::GetIsPath() const 
+bool Tile::GetIsPath() const
 {
 	return _isPath;
 }
 
-void Tile::Render(Canvas* canvas) 
+bool Tile::Initialize(Canvas* canvas) 
+{
+	if (_isInit) return true;
+	if (!LoadShaders(canvas)) return false;
+
+	_isInit = true;
+	return true;
+}
+
+void Tile::Render(Canvas* canvas)
 {
 	ID3D11DeviceContext* deviceContext = canvas->GetDeviceContext();
 
 	// Set shaders and input layout
-	// ÉVÉFÅ[É_Å[Ç∆ÉCÉìÉvÉbÉgÉåÉCÉAÉEÉg
+	// „Ç∑„Çß„Éº„ÉÄ„Éº„ÇíË®≠ÂÆö„Åô„Çã„ÄÅ„Ç§„É≥„Éó„ÉÉ„Éà„É¨„Ç§„Ç¢„Ç¶„Éà„ÇíË®≠ÂÆö„Åô„Çã
 	deviceContext->VSSetShader(_vertexShader.Get(), nullptr, 0);
 	deviceContext->PSSetShader(_pixelShader.Get(), nullptr, 0);
 	deviceContext->IASetInputLayout(_vertexLayout.Get());
 
 	// Set vertex buffers
-	// vertexÉoÉbÉtÉ@
+	// „Éê„Éº„ÉÜ„ÉÉ„ÇØ„Çπ„Ç∑„Çß„Éº„ÉÄ„Éº„ÇíË®≠ÂÆö„Åô„Çã
 	UINT stride = sizeof(VertexPosCol);
 	UINT offset = 0;
 	deviceContext->IASetVertexBuffers(0, 1, _vertexBuffer.GetAddressOf(), &stride, &offset);
 
 	// Set primitive topology
-	// primmitive ÉgÉ|ÉçÉWÅ[
+	// „Éó„É™„Éü„ÉÜ„Ç£„Éñ„Éà„Éù„É≠„Ç∏„Éº„ÇíË®≠ÂÆö„Åô„Çã
 	deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	// Draw
-	// âÊñ Ç…ï`Ç≠
+	// Á¢∫Ë™ç
 	deviceContext->Draw(6, 0);
+}
+// =============================================
+
+
+// ======== Private =======
+bool Tile::CompileShader(const std::wstring& filename, const std::string& entryPoint,
+	const std::string& profile, ComPtr<ID3DBlob>& shaderBlob) const
+{
+	constexpr uint32_t compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+
+	ComPtr<ID3DBlob> tempShaderBlob = nullptr;
+	ComPtr<ID3DBlob> errorBlob = nullptr;
+
+	ErrorChecker errChecker = {};
+
+	if (!errChecker.CheckDX11HRESULTSUCCEEDED(
+		D3DCompileFromFile(filename.data(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint.data(), profile.data(), compileFlags, 0, &tempShaderBlob, &errorBlob),
+		ErrorCheckShader)) {
+		
+		if (errorBlob != nullptr)
+		{
+			std::cerr << "D3D11: With message: " << static_cast<const char*>(errorBlob->GetBufferPointer()) << std::endl;
+		}
+		return false;
+	}
+
+	shaderBlob = std::move(tempShaderBlob);
+	return true;
 }
 
 bool Tile::LoadShaders(Canvas* canvas)
@@ -108,16 +142,10 @@ bool Tile::LoadShaders(Canvas* canvas)
 
 	ComPtr<ID3DBlob> vertexShaderBlob = nullptr;
 	_vertexShader = CreateVertexShader(L"assets\\shaders\\tile_vs.hlsl", vertexShaderBlob, canvas);
-	if (_vertexShader == nullptr) 
-	{
-		return false;
-	}
+	if (_vertexShader == nullptr) return false;
 
 	_pixelShader = CreatePixelShader(L"assets\\shaders\\tile_ps.hlsl", canvas);
-	if (_pixelShader == nullptr) 
-	{
-		return false;
-	}
+	if (_pixelShader == nullptr) return false;
 
 	constexpr D3D11_INPUT_ELEMENT_DESC vertexInputLayoutInfo[] =
 	{
@@ -130,6 +158,7 @@ bool Tile::LoadShaders(Canvas* canvas)
 			D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA,
 			0
 		},
+
 		{
 			"COLOR",
 			0,
@@ -140,37 +169,41 @@ bool Tile::LoadShaders(Canvas* canvas)
 			0
 		}
 	};
-	if (FAILED(device->CreateInputLayout(
-		vertexInputLayoutInfo, _countof(vertexInputLayoutInfo),
-		vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(),
-		&_vertexLayout))) {
-		
-		std::cerr << "D3D11: Failed to create default vertex input layout\n";
-		return false;
-	}
 
-	// Determine tile color based on state
-	// èÛë‘Ç…ÇÊÇ¡ÇƒêFÇïœçX
+	ErrorChecker errChecker = {};
+
+	if (!errChecker.CheckDX11HRESULTSUCCEEDED(device->CreateInputLayout(
+		vertexInputLayoutInfo, _countof(vertexInputLayoutInfo),
+		vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &_vertexLayout
+	),
+		ErrorCheckInputLayout)) return false;
+
+
+	// Determine tile data based on Maze
+	// „Çø„Ç§„É´„Éá„Éº„Çø„Çí„É°„Ç§„Ç∫„ÅÆ„Éá„Éº„Çø„Å´„Çà„Å£„Å¶ÂÆö„ÇÅ„Çã
+
 	DirectX::XMFLOAT3 tileCol;
-	if		(_isWall)	tileCol = { 1.0f, 0.0f, 0.0f };
+	if (_isWall)	tileCol = { 1.0f, 0.0f, 0.0f };
 	else if (_isPath)	tileCol = { 0.0f, 1.0f, 0.0f };
 	else            	tileCol = { 1.0f, 1.0f, 1.0f };
 
 	// Define vertices for a quad representing the tile
-	// éläpÇ¢ÇÃÇQÇ¬ÇÃéOäpå`
+	// 2„Å§„ÅÆ‰∏âËßíÂΩ¢„ÅßÂõõËßíÂΩ¢„ÇíÂÆöÁæ©„Åô„Çã
 	VertexPosCol vertices[] =
 	{
 		// First triangle (top-left, top-right, bottom-left)
+		// 1ÁõÆÊßò
 		{{_normWorldX,			    _normWorldY,			   0.0f}, {tileCol}},
 		{{_normWorldX + _normWidth, _normWorldY,			   0.0f}, {tileCol}},
 		{{_normWorldX,			    _normWorldY + _normHeight, 0.0f}, {tileCol}},
 
-		// Second triangle (bottom-left, top-right, bottom-right
+		// Second triangle (bottom-left, top-right, bottom-right)
+		// 2ÁõÆÊßò
 		{{_normWorldX,			    _normWorldY + _normHeight, 0.0f}, {tileCol}},
 		{{_normWorldX + _normWidth, _normWorldY,			   0.0f}, {tileCol}},
 		{{_normWorldX + _normWidth, _normWorldY + _normHeight, 0.0f}, {tileCol}},
 	};
-	
+
 	D3D11_BUFFER_DESC bufferInfo = {};
 	bufferInfo.ByteWidth = sizeof(VertexPosCol) * 6;
 	bufferInfo.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE;
@@ -178,43 +211,16 @@ bool Tile::LoadShaders(Canvas* canvas)
 	D3D11_SUBRESOURCE_DATA resourceData = {};
 	resourceData.pSysMem = vertices;
 
-	if (FAILED(device->CreateBuffer(
-		&bufferInfo,
-		&resourceData,
-		&_vertexBuffer
-	))) {
-		std::cerr << "D3D11: Failed to create triangle vertex buffer\n";
-		return false;
-	}
-	return true;
-}
+	if (!errChecker.CheckDX11HRESULTSUCCEEDED(device->CreateBuffer(
+		&bufferInfo, &resourceData, &_vertexBuffer
+	), ErrorCheckVertexBuffer)) return false;
 
-bool Tile::CompileShader(const std::wstring& filename, const std::string& entryPoint, 
-	const std::string& profile, ComPtr<ID3DBlob>& shaderBlob) const
-{
-	constexpr uint32_t compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
-
-	ComPtr<ID3DBlob> tempShaderBlob = nullptr;
-	ComPtr<ID3DBlob> errorBlob = nullptr;
-	if (FAILED(D3DCompileFromFile(filename.data(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		entryPoint.data(), profile.data(), compileFlags, 0, &tempShaderBlob, &errorBlob))) {
-		
-		std::cerr << "D3D11: Failed to read shader from file\n";
-		if (errorBlob != nullptr) 
-		{
-			std::cerr << "D3D11: With message: " << static_cast<const char*>(errorBlob->GetBufferPointer()) << "\n";
-		}
-
-		return false;
-	}
-
-	shaderBlob = std::move(tempShaderBlob);
 	return true;
 }
 
 Tile::ComPtr<ID3D11VertexShader> Tile::CreateVertexShader(const std::wstring& fileName, ComPtr<ID3DBlob>& vertexShaderBlob, Canvas* canvas) const
 {
-	if (!CompileShader(fileName, "main", "vs_5_0", vertexShaderBlob)) 
+	if (!CompileShader(fileName, "main", "vs_5_0", vertexShaderBlob))
 	{
 		return nullptr;
 	}
@@ -224,7 +230,7 @@ Tile::ComPtr<ID3D11VertexShader> Tile::CreateVertexShader(const std::wstring& fi
 		vertexShaderBlob->GetBufferPointer(),
 		vertexShaderBlob->GetBufferSize(),
 		nullptr,
-		&vertexShader))) 
+		&vertexShader)))
 	{
 		std::cerr << "D3D11: Failed to compile vertex shader\n";
 		return nullptr;
@@ -236,7 +242,7 @@ Tile::ComPtr<ID3D11VertexShader> Tile::CreateVertexShader(const std::wstring& fi
 Tile::ComPtr<ID3D11PixelShader> Tile::CreatePixelShader(const std::wstring& filename, Canvas* canvas) const
 {
 	ComPtr<ID3DBlob> pixelShaderBlob = nullptr;
-	if (!CompileShader(filename, "main", "ps_5_0", pixelShaderBlob)) 
+	if (!CompileShader(filename, "main", "ps_5_0", pixelShaderBlob))
 	{
 		return nullptr;
 	}
@@ -247,10 +253,11 @@ Tile::ComPtr<ID3D11PixelShader> Tile::CreatePixelShader(const std::wstring& file
 		pixelShaderBlob->GetBufferSize(),
 		nullptr,
 		&pixelShader))) {
-	
+
 		std::cerr << "D3D11: Failed to compile pixel shader\n";
 		return nullptr;
 	}
 
 	return pixelShader;
 }
+// =======================================
