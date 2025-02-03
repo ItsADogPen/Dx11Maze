@@ -42,6 +42,8 @@ public:
 	int GetMazeHeight(void) const;
 	int GetCellWidth(void) const;
 	int GetCellHeight(void) const;
+	bool GetIsDrawn(void) const;
+	void SetIsDrawn(bool state);
 	std::vector<GridIndex>* GetMaze(void);
 	std::vector<GridIndex>* GetPath(void);
 	std::vector<Tile>& GetTiles(void);
@@ -55,6 +57,8 @@ private:
 	int _mazeSizeHeight;
 	int _cellWidth;
 	int _cellHeight;
+
+	bool _isDrawn = false;
 
 	std::vector<GridIndex> _maze;
 	std::vector<GridIndex> _path;

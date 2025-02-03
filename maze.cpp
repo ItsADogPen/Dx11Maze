@@ -12,6 +12,7 @@ Maze::~Maze()
 
 void Maze::InitMaze(int nCellsWidth, int nCellsHeight, int scrnW, int scrnH)
 {
+	_isDrawn = false;
 	_cellWidth = scrnW / nCellsWidth;
 	_cellHeight = scrnH / nCellsHeight;
 	_mazeSizeWidth = _cellWidth * nCellsWidth;
@@ -221,6 +222,8 @@ void Maze::GeneratePath(Canvas* canvas)
 		}
 		_tiles.push_back(newTile);
 	}
+
+	_isDrawn = true;
 }
 
 int Maze::GetMazeWidth() const
@@ -241,6 +244,16 @@ int Maze::GetCellWidth() const
 int Maze::GetCellHeight() const
 {
 	return _cellHeight;
+}
+
+bool Maze::GetIsDrawn() const 
+{
+	return _isDrawn;
+}
+
+void Maze::SetIsDrawn(bool state) 
+{
+	_isDrawn = state;
 }
 
 std::vector<GridIndex>* Maze::GetMaze(void)

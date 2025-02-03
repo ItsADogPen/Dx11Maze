@@ -38,12 +38,14 @@ protected:
 
 private:
 
+	void GenerateNewMazeSet(void);
 	void ProcessInput(void);
 	void UpdateVariables(void);
 	void RenderGraphics(void);
 	
 	std::string _title;
 	bool* _isRunning;
+	bool _isWaitingForMaze;
 	int _scrnW;
 	int _scrnH;
 
@@ -57,6 +59,8 @@ private:
 	ComPtr<IDXGISwapChain1> _swapChain = nullptr;
 	ComPtr<ID3D11RenderTargetView> _renderTarget = nullptr;
 	ComPtr<ID3D11RasterizerState> _rasterizerState = nullptr;
+	ComPtr<ID3D11RasterizerState> _rasterizerStateWireframe = nullptr;
+	ComPtr<ID3D11RasterizerState> _rasterizerStateSolid = nullptr;
 	// ================================
 
 	// ========== SDL ==========

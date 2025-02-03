@@ -25,14 +25,6 @@ Canvas::Canvas(std::string& title, int scrnW, int scrnH, bool* isRunning)
 	// = 特別なSDL確認 =
 	if (!errChecker.CheckSDLInitResult(SDL_Init(SDL_INIT_EVERYTHING))) return;
 
-	/*
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) 
-	{
-		std::cerr << "Error initializing SDL\n";
-		return;
-	}
-	*/
-
 	_title = title;
 	_isRunning = isRunning;
 	_scrnW = scrnW;
@@ -41,25 +33,10 @@ Canvas::Canvas(std::string& title, int scrnW, int scrnH, bool* isRunning)
 	// ====== SDL ======
 
 	// SDL window (画面）context
-	// 
 	if (!errChecker.CheckSDLResult(_window = SDL_CreateWindow(
 		_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 		scrnW, scrnH, NULL), 
 		ErrorCheckSDLWindow)) return;
-
-	/*
-	if (!(_window = SDL_CreateWindow(
-		_title.c_str(),
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		scrnW,
-		scrnH,
-		NULL))) {
-	
-		std::cerr << "Error initializing SDL window\n";
-		return;
-	}
-	*/
 	// ===========================
 
 	// ====== D3D11 ======
@@ -73,15 +50,27 @@ Canvas::Canvas(std::string& title, int scrnW, int scrnH, bool* isRunning)
 		0, &d3dFeatureLevel, 1, D3D11_SDK_VERSION, &_device, nullptr, &_deviceContext);
 	if (!errChecker.CheckDX11HRESULTSUCCEEDED(HR_d3dFeatureLevel, ErrorCheckDeviceAndDeviceContext)) return;
 
-	D3D11_RASTERIZER_DESC rastDesc = {};
-	rastDesc.FillMode = D3D11_FILL_SOLID;
-	rastDesc.CullMode = D3D11_CULL_NONE;
-	rastDesc.FrontCounterClockwise = FALSE;
-	rastDesc.DepthClipEnable = TRUE;
-	rastDesc.ScissorEnable = FALSE;
-	rastDesc.MultisampleEnable = FALSE;
-	rastDesc.AntialiasedLineEnable = FALSE;
-	if (!errChecker.CheckDX11HRESULTSUCCEEDED(_device->CreateRasterizerState(&rastDesc, &_rasterizerState), ErrorCheckRasterizerState)) return;
+	D3D11_RASTERIZER_DESC rastDescSolid = {};
+	rastDescSolid.FillMode = D3D11_FILL_SOLID;
+	rastDescSolid.CullMode = D3D11_CULL_NONE;
+	rastDescSolid.FrontCounterClockwise = FALSE;
+	rastDescSolid.DepthClipEnable = TRUE;
+	rastDescSolid.ScissorEnable = FALSE;
+	rastDescSolid.MultisampleEnable = FALSE;
+	rastDescSolid.AntialiasedLineEnable = FALSE;
+	if (!errChecker.CheckDX11HRESULTSUCCEEDED(_device->CreateRasterizerState(&rastDescSolid, &_rasterizerStateSolid), ErrorCheckRasterizerState)) return;
+
+	D3D11_RASTERIZER_DESC rastDescWired = {};
+	rastDescWired.FillMode = D3D11_FILL_WIREFRAME;
+	rastDescWired.CullMode = D3D11_CULL_NONE;
+	rastDescWired.FrontCounterClockwise = FALSE;
+	rastDescWired.DepthClipEnable = TRUE;
+	rastDescWired.ScissorEnable = FALSE;
+	rastDescWired.MultisampleEnable = FALSE;
+	rastDescWired.AntialiasedLineEnable = FALSE;
+	if (!errChecker.CheckDX11HRESULTSUCCEEDED(_device->CreateRasterizerState(&rastDescWired, &_rasterizerStateWireframe), ErrorCheckRasterizerState)) return;
+
+	_rasterizerState = _rasterizerStateSolid;
 
 	DXGI_SWAP_CHAIN_DESC1 scDesc = {};
 	scDesc.Width = scrnW;
@@ -111,16 +100,11 @@ Canvas::Canvas(std::string& title, int scrnW, int scrnH, bool* isRunning)
 
 	// == Generate Maze ==
 	// == メイズを生じる ==
-	
-	Maze& maze = Maze::GetInstance();
-	maze.InitMaze(20, 20, _scrnW, _scrnH);
-	maze.GenerateMaze(this);
-	std::cout << "Maze created with " << maze.GetMaze()->size() << " cells\n";
-	maze.FindPath(0, 0, 400, 400);
-	maze.GeneratePath(this);
+	_isWaitingForMaze = true;
+	GenerateNewMazeSet();
 	//====================
 
-	std::cout << "Canvas Initialization SUCCESS\n";
+	std::cout << "\n\nCanvas Initialization SUCCESS\n\n";
 }
 
 Canvas::~Canvas() 
@@ -165,25 +149,60 @@ int Canvas::GetScreenHeight(void) const
 
 
 // ========== Private ==========
+void Canvas::GenerateNewMazeSet(void) 
+{
+	if (!_isWaitingForMaze) 
+	{
+		std::cout << "Illegal call of Maze generation, aborting Maze generation\n";
+		return;
+	}
+	Maze& maze = Maze::GetInstance();
+	maze.InitMaze(20, 20, _scrnW, _scrnH);
+	maze.GenerateMaze(this);
+	std::cout << "Maze created with " << maze.GetMaze()->size() << " cells\n";
+	maze.FindPath(0, 0, 400, 400);
+	maze.GeneratePath(this);
+	_isWaitingForMaze = false;
+}
+
 void Canvas::ProcessInput(void) 
 {
 	SDL_Event event;
-	SDL_PollEvent(&event);
 
-	switch (event.type) 
+	while (SDL_PollEvent(&event)) 
 	{
-		case SDL_QUIT:
+		switch (event.type)
 		{
-			*_isRunning = false;
-		}break;
-
-		case SDL_KEYDOWN: 
-		{
-			if (event.key.keysym.sym == SDLK_ESCAPE) 
+			case SDL_QUIT:
 			{
 				*_isRunning = false;
-			}
-		}break;
+			}break;
+
+			case SDL_KEYDOWN:
+			{
+				if (event.key.keysym.sym == SDLK_ESCAPE)
+				{
+					*_isRunning = false;
+				}
+				if (event.key.keysym.sym == SDLK_1)
+				{
+					_rasterizerState = (_rasterizerState == _rasterizerStateSolid) ?
+						_rasterizerStateWireframe : _rasterizerStateSolid;
+				}
+				if (event.key.keysym.sym == SDLK_f && !_isWaitingForMaze)
+				{
+					_isWaitingForMaze = true;
+
+					// Force a render frame - Clear screen
+					// １つレンダリングフレームを強いる - 画面をクリア
+					constexpr float clearColor[] = { 0.5f, 0.5f, 0.5f, 1.0f };
+					_deviceContext->ClearRenderTargetView(_renderTarget.Get(), clearColor);
+					_swapChain->Present(1, 0);
+
+					GenerateNewMazeSet();
+				}
+			}break;
+		}
 	}
 }
 
@@ -204,7 +223,6 @@ void Canvas::RenderGraphics(void)
 		viewport.MinDepth = 0.0f;
 		viewport.MaxDepth = 1.0f;
 
-
 		// Device Context
 		// Sets all relevant COM Objects
 		// 関連する全てのCOM Objectを設定する
@@ -218,10 +236,13 @@ void Canvas::RenderGraphics(void)
 		// Get Maze instance and its tiles
 		// メイズのタイルごと
 		Maze& maze = Maze::GetInstance();
-		std::vector<Tile>& tiles = maze.GetTiles();
-		for (auto& tile : tiles)
+		if (maze.GetIsDrawn()) 
 		{
-			tile.Render(this);
+			std::vector<Tile>& tiles = maze.GetTiles();
+			for (auto& tile : tiles)
+			{
+				tile.Render(this);
+			}
 		}
 
 		// Present the swap chain
