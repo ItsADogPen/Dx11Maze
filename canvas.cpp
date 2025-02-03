@@ -189,20 +189,23 @@ void Canvas::ProcessInput(void)
 					_rasterizerState = (_rasterizerState == _rasterizerStateSolid) ?
 						_rasterizerStateWireframe : _rasterizerStateSolid;
 				}
-				if (event.key.keysym.sym == SDLK_f && !_isWaitingForMaze)
-				{
-					_isWaitingForMaze = true;
-
-					// Force a render frame - Clear screen
-					// １つレンダリングフレームを強いる - 画面をクリア
-					constexpr float clearColor[] = { 0.5f, 0.5f, 0.5f, 1.0f };
-					_deviceContext->ClearRenderTargetView(_renderTarget.Get(), clearColor);
-					_swapChain->Present(1, 0);
-
-					GenerateNewMazeSet();
-				}
 			}break;
 		}
+	}
+
+	// Handle maze regeneration using key states instead of events
+	const Uint8* keyState = SDL_GetKeyboardState(NULL);
+	if (keyState[SDL_SCANCODE_F] && !_isWaitingForMaze) 
+	{
+		_isWaitingForMaze = true;
+
+		// Force a render frame - Clear screen
+		// １つレンダリングフレームを強いる - 画面をクリア
+		constexpr float clearColor[] = { 0.5f, 0.5f, 0.5f, 1.0f };
+		_deviceContext->ClearRenderTargetView(_renderTarget.Get(), clearColor);
+		_swapChain->Present(1, 0);
+
+		GenerateNewMazeSet();
 	}
 }
 
